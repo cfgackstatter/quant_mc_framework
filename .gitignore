@@ -1,0 +1,43 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Project specific
+plots/
+*.png
+*.jpg
+*.jpeg
+*.pdf
+
+# Signac files
+workspace/
+signac.rc
+
+# Logs
+*.log
+
+# OS specific
+.DS_Store
+Thumbs.db
