@@ -3,25 +3,27 @@
 A framework for running Monte Carlo simulations of quantitative trading strategies with parameter variations.
 
 ## Installation
+```
 git clone https://github.com/cfgackstatter/quant_mc_framework.git
 cd quant_mc_framework
 pip install -e .
+```
 
 ## Usage
 
 ### Run a single simulation
-python quant_mc_framework/run_single_sim.py
+```python quant_mc_framework/run_single_sim.py```
 
 ### Run Monte Carlo simulations
 
 #### Setup jobs
-python quant_mc_framework/main.py --setup
+```python quant_mc_framework/main.py --setup```
 
 #### Run simulations
-python quant_mc_framework/main.py --run --workers 4
+```python quant_mc_framework/main.py --run --workers 4```
 
 #### Analyze results
-python quant_mc_framework/main.py --analyze
+```python quant_mc_framework/main.py --analyze```
 
 ## Features
 
