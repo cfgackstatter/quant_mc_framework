@@ -5,7 +5,6 @@ import signac
 import itertools
 from .engine import LongShortSimulation
 
-np.seterr(all='ignore')
 
 class MonteCarloManager:
     def __init__(self, base_params, param_ranges, n_simulations=100):

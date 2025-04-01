@@ -3,6 +3,11 @@ import argparse
 from quant_mc_framework.simulation.monte_carlo import MonteCarloManager
 from quant_mc_framework.analysis.visualization import plot_parameter_boxplots, plot_heatmap
 
+# Suppress warnings when NumPy types are automatically converted to Python types for storage in signac's job documents
+import warnings
+from synced_collections.numpy_utils import NumpyConversionWarning
+warnings.filterwarnings("ignore", category=NumpyConversionWarning)
+
 def main():
     parser = argparse.ArgumentParser(description='Run Monte Carlo simulations for trading strategies')
     parser.add_argument('--setup', action='store_true', help='Setup jobs')
