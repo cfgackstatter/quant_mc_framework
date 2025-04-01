@@ -1,6 +1,8 @@
 # Monte Carlo Framework for Long-Short Investment Strategy
 
-A framework for running Monte Carlo simulations of quantitative trading strategies with parameter variations.
+A framework for running and analyzing Monte Carlo simulations of a quantitative trading strategy with parameter variations.
+
+The strategy is a long-short factor strategy with an options overlay.
 
 ## Installation
 ```
@@ -27,8 +29,9 @@ pip install -e .
 
 ## Features
 
+- Generate random stock price and factor data with factor autocorrelation and information coefficient
 - Long-short equity strategy with factor-based stock selection
-- Options overlay with covered calls and cash-secured puts
-- Turnover constraints and leverage targeting
+- Portfolio optimizer with turnover and leverage constraints
+- Options overlay with covered calls and puts
 - Monte Carlo simulations with parameter variations
 - Performance metrics and visualization
