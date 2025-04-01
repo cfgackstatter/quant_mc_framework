@@ -31,7 +31,10 @@ class MonteCarloManager:
         for values in itertools.product(*param_values):
             # Create parameter dictionary for this cobination
             params = self.base_params.copy()
-            params.update(dict(zip(param_keys, values)))
+
+            # Update the parameters that are being varied
+            for i, key in enumerate(param_keys):
+                params[key] = values[i]
 
             # Create a job for this parameter set
             job = self.project.open_job(params)

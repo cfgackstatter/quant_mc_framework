@@ -25,13 +25,18 @@ class LongShortSimulation:
             factor_seed = seed
             returns_seed = seed + 1000
 
-        # Extract parameters
+        # Extract parameters from different categories
+        # Market parameters
+        factor_autocorrelation = self.params.get('factor_autocorrelation')
+        information_coefficient = self.params.get('information_coefficient')
+
+        # Long-short strategy parameters
         n_stocks = self.params.get('n_stocks')
-        target_ic = self.params.get('target_ic')
-        target_leverage = self.params.get('target_leverage')
-        max_turnover = self.params.get('max_turnover')
         initial_cash = self.params.get('initial_cash')
-        autocorrelation = self.params.get('autocorrelation')
+        max_turnover = self.params.get('max_turnover')
+        target_leverage = self.params.get('target_leverage')
+
+        # Options overlay parameters
         otm_percentage = self.params.get('otm_percentage')
 
         # Generate dates
@@ -44,7 +49,7 @@ class LongShortSimulation:
 
         # Generate factor scores with autocorrelation
         factor_scores_dict = generate_factor_scores(
-            n_stocks, len(months)-1, autocorrelation, factor_seed
+            n_stocks, len(months)-1, factor_autocorrelation, factor_seed
         )
         factor_scores_df = pd.DataFrame(factor_scores_dict, index=months[:-1])
 
@@ -54,7 +59,7 @@ class LongShortSimulation:
 
         # Generate returns and stock prices
         returns_data = generate_lognormal_returns(
-            factor_scores_dict, target_ic, volatilities_dict, returns_seed
+            factor_scores_dict, information_coefficient, volatilities_dict, returns_seed
         )
         initial_prices = np.random.uniform(10, 150, n_stocks)
         initial_prices_dict = dict(zip(stocks, initial_prices))
@@ -79,9 +84,6 @@ class LongShortSimulation:
             'portfolio_value': portfolio_value,
             'portfolio_with_options': portfolio_with_options,
             'metrics': metrics,
-            'weights': weights,
-            'shares': shares,
-            'stock_prices': stock_prices,
         }
     
 

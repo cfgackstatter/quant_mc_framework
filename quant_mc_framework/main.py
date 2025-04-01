@@ -12,20 +12,30 @@ def main():
     parser.add_argument('--simulations', type=int, default=100, help='Number of simulations per parameter set')
     args = parser.parse_args()
 
-    # Define base parameters
-    base_params = {
-        'n_stocks': 100,
-        'target_ic': 0.025,
-        'initial_cash': 1000000,
-        'autocorrelation': 0.1,
+    # Define structured parameters
+    market_params = {
+        'factor_autocorrelation': 0.1,
+        'information_coefficient': 0.025
     }
 
-    # Define parameter ranges to explore
-    param_ranges = {
-        'target_leverage': [0.5, 1.0, 1.5, 2.0],
-        'max_turnover': [0.5, 1.0, 2.0],
-        'otm_percentage': [-0.10, -0.05, 0.0, 0.05, 0.10]
+    long_short_params = {
+        'n_stocks': 500,
+        'initial_cash': 10000000,
+        'max_turnover': 1.0,
+        'target_leverage': 1.5  # This could be in long_short_params
     }
+
+    options_overlay_params = {
+        'otm_percentage': 0.0  # Default value
+    }
+
+    # Define parameter ranges (only for otm_percentage for now)
+    param_ranges = {
+        'otm_percentage': [-0.1, -0.05, 0.0, 0.05, 0.1]
+    }
+
+    # Combine all parameters into base_params for the MonteCarloManager
+    base_params = {**market_params, **long_short_params, **options_overlay_params}
 
     # Create Monte Carlo manager
     mc_manager = MonteCarloManager(
