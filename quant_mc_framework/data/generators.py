@@ -25,7 +25,7 @@ def generate_factor_scores(n_stocks, n_periods, autocorrelation=0.0, seed=None):
     return factor_scores
 
 
-def generate_lognormal_returns(factor_scores, target_ic, volatilities, seed=None):
+def generate_lognormal_returns(factor_scores, information_coefficient, annual_expected_return, volatilities, seed=None):
     """Generate log-normal returns correlated with factor scores"""
     if seed is not None:
         np.random.seed(seed)
@@ -34,8 +34,8 @@ def generate_lognormal_returns(factor_scores, target_ic, volatilities, seed=None
     for stock, volatility in volatilities.items():
         noise = np.random.normal(0, 1, len(factor_scores[stock]))
         sigma = volatility / np.sqrt(12)
-        mu = -0.5 * sigma**2 # Ensures E[exp(X)] = 1
-        correlated_normal = target_ic * factor_scores[stock] + np.sqrt(1 - target_ic**2) * noise
+        mu = annual_expected_return / 12 - 0.5 * sigma**2
+        correlated_normal = information_coefficient * factor_scores[stock] + np.sqrt(1 - information_coefficient**2) * noise
         raw_returns = np.exp(mu + sigma * correlated_normal) - 1
         returns_data[stock] = raw_returns
 
