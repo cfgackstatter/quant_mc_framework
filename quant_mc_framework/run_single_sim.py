@@ -8,13 +8,13 @@ def run_single_simulation():
     # Define parameters
     params = {
         'n_stocks': 500,
-        'information_coefficient': 0.1,
-        'annual_expected_return': 0.0,
+        'information_coefficient': 0.05,
+        'annual_expected_return': 0.05,
         'target_leverage': 1.5,
         'max_turnover': 1,
         'initial_cash': 10000000,
         'factor_autocorrelation': 0.1,
-        'otm_percentage': 0.00,
+        'otm_percentage': -0.05,
     }
 
     # Create and run simulation
