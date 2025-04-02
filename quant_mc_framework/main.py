@@ -20,7 +20,8 @@ def main():
     # Define structured parameters
     market_params = {
         'factor_autocorrelation': 0.1,
-        'information_coefficient': 0.025
+        'information_coefficient': 0.025,
+        'annual_expected_return': 0.06,
     }
 
     long_short_params = {

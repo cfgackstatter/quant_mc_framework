@@ -8,11 +8,12 @@ def run_single_simulation():
     # Define parameters
     params = {
         'n_stocks': 500,
-        'target_ic': 0.05,
+        'information_coefficient': 0.1,
+        'annual_expected_return': 0.0,
         'target_leverage': 1.5,
         'max_turnover': 1,
         'initial_cash': 10000000,
-        'autocorrelation': 0.1,
+        'factor_autocorrelation': 0.1,
         'otm_percentage': 0.00,
     }
 
@@ -30,7 +31,7 @@ def run_single_simulation():
     plt.savefig('single_sim_results.png')
    
     # Print metrics
-    print("\nBase Strategy Metrics:")
+    print("\nLong-Short Strategy Metrics:")
     for key, value in metrics['base_strategy'].items():
         print(f"  {key}: {value:.4f}")
     

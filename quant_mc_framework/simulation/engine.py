@@ -29,6 +29,7 @@ class LongShortSimulation:
         # Market parameters
         factor_autocorrelation = self.params.get('factor_autocorrelation')
         information_coefficient = self.params.get('information_coefficient')
+        annual_expected_return = self.params.get('annual_expected_return')
 
         # Long-short strategy parameters
         n_stocks = self.params.get('n_stocks')
@@ -59,7 +60,7 @@ class LongShortSimulation:
 
         # Generate returns and stock prices
         returns_data = generate_lognormal_returns(
-            factor_scores_dict, information_coefficient, volatilities_dict, returns_seed
+            factor_scores_dict, information_coefficient, annual_expected_return, volatilities_dict, returns_seed
         )
         initial_prices = np.random.uniform(10, 150, n_stocks)
         initial_prices_dict = dict(zip(stocks, initial_prices))
