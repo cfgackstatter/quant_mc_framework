@@ -2,27 +2,27 @@ import numpy as np
 import pandas as pd
 from scipy.stats import norm
 
-def generate_factor_scores(n_stocks, n_periods, autocorrelation=0.0, seed=None):
+def generate_factor_scores(n_stocks, n_periods, factor_autocorrelation, seed=None):
     """Generate random factor scores with autocorrelation"""
     if seed is not None:
         np.random.seed(seed)
 
-    factor_scores = {}
+    factor_scores_dict = {}
     for stock in range(n_stocks):
         stock_name = f'Stock_{stock+1}'
         # Initialize the first factor score
-        factor_scores[stock_name] = [np.random.normal(0, 1)]
+        factor_scores_dict[stock_name] = [np.random.normal(0, 1)]
 
         # Generate subsequent factor scores using AR(1) process
         for t in range(1, n_periods):
-            new_score = (autocorrelation * factor_scores[stock_name][-1] +
-                         np.sqrt(1 - autocorrelation**2) * np.random.normal(0, 1))
-            factor_scores[stock_name].append(new_score)
+            new_score = (factor_autocorrelation * factor_scores_dict[stock_name][-1] +
+                         np.sqrt(1 - factor_autocorrelation**2) * np.random.normal(0, 1))
+            factor_scores_dict[stock_name].append(new_score)
         
         # Convert list to numpy array
-        factor_scores[stock_name] = np.array(factor_scores[stock_name])
+        factor_scores_dict[stock_name] = np.array(factor_scores_dict[stock_name])
     
-    return factor_scores
+    return factor_scores_dict
 
 
 def generate_lognormal_returns(factor_scores, information_coefficient, annual_expected_return, volatilities, seed=None):
@@ -45,7 +45,7 @@ def generate_lognormal_returns(factor_scores, information_coefficient, annual_ex
 def generate_stock_prices(returns_data, initial_prices, dates):
     """Generate stock prices from returns"""
     stocks = list(returns_data.keys())
-    stock_prices = pd.DataFrame(index=dates, columns=stocks)
+    stock_prices = pd.DataFrame(index=dates, columns=stocks, dtype=float)
 
     #Set initial prices
     stock_prices.iloc[0] = initial_prices

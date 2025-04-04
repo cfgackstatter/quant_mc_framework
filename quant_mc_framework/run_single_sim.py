@@ -7,14 +7,22 @@ def run_single_simulation():
     """Run a single simulation and plot results"""
     # Define parameters
     params = {
-        'n_stocks': 500,
-        'information_coefficient': 0.05,
-        'annual_expected_return': 0.05,
-        'target_leverage': 1.5,
-        'max_turnover': 1,
+        # Market parameters
+        'factor_autocorrelation': 0.2,
+        'information_coefficient': 0.025,
+        'annual_expected_return': 0.0,
+
+        # Long-Short strategy parameters
+        'n_stocks': 100,
         'initial_cash': 10000000,
-        'factor_autocorrelation': 0.1,
-        'otm_percentage': -0.05,
+        'long_weight': 1.3,
+        'short_weight': 0.3,
+        'max_turnover': 1.0,
+        'risk_aversion': 0.5,
+        'single_asset_bound': 0.05,
+        
+        # Options overlay parameters
+        'otm_percentage': 0.05,
     }
 
     # Create and run simulation
@@ -23,7 +31,7 @@ def run_single_simulation():
 
     # Extract results
     portfolio_value = results['portfolio_value']
-    portfolio_with_options = results['portfolio_with_options']
+    portfolio_with_options = results['portfolio_value_with_options_overlay']
     metrics = results['metrics']
 
     # Plot results
@@ -35,7 +43,7 @@ def run_single_simulation():
     for key, value in metrics['base_strategy'].items():
         print(f"  {key}: {value:.4f}")
     
-    print("\nOptions Overlay Metrics:")
+    print("\nLong-Short Strategy w/ Options Overlay Metrics:")
     for key, value in metrics['options_overlay'].items():
         print(f"  {key}: {value:.4f}")
     

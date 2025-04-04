@@ -5,7 +5,7 @@ from ..data.generators import (
     generate_stock_prices, black_scholes
 )
 from ..simulation.strategies import (
-    calculate_factor_weights, optimize_weights
+    calculate_alphas, optimize_weights
 )
 
 
@@ -34,8 +34,11 @@ class LongShortSimulation:
         # Long-short strategy parameters
         n_stocks = self.params.get('n_stocks')
         initial_cash = self.params.get('initial_cash')
+        long_weight = self.params.get('long_weight')
+        short_weight = self.params.get('short_weight')
         max_turnover = self.params.get('max_turnover')
-        target_leverage = self.params.get('target_leverage')
+        risk_aversion = self.params.get('risk_aversion')
+        single_asset_bound = self.params.get('single_asset_bound')
 
         # Options overlay parameters
         otm_percentage = self.params.get('otm_percentage')
@@ -58,80 +61,93 @@ class LongShortSimulation:
         volatilities = np.random.uniform(0.15, 0.75, n_stocks)
         volatilities_dict = dict(zip(stocks, volatilities))
 
-        # Generate returns and stock prices
+        # Generate returns, stock prices and covariance matrix
         returns_data = generate_lognormal_returns(
             factor_scores_dict, information_coefficient, annual_expected_return, volatilities_dict, returns_seed
         )
         initial_prices = np.random.uniform(10, 150, n_stocks)
         initial_prices_dict = dict(zip(stocks, initial_prices))
+        
         stock_prices = generate_stock_prices(returns_data, initial_prices_dict, months)
+        
+        cov_matrix = stock_prices.pct_change().cov() * 12
 
         # Run long-short strategy
         portfolio_value, weights, shares = self.run_long_short_strategy(
             factor_scores_df, stock_prices, months,
-            target_leverage, max_turnover, initial_cash
+            long_weight, short_weight, max_turnover, initial_cash,
+            cov_matrix, risk_aversion, single_asset_bound
         )
 
         # Run options overlay
-        portfolio_with_options = self.run_options_overlay(
+        portfolio_value_with_options_overlay = self.run_options_overlay(
             factor_scores_df, stock_prices, shares,
             volatilities_dict, months, otm_percentage, portfolio_value
         )
 
         # Calculate performance metrics
-        metrics = self.calculate_metrics(portfolio_value, portfolio_with_options)
+        metrics = self.calculate_metrics(portfolio_value, portfolio_value_with_options_overlay)
 
         return {
             'portfolio_value': portfolio_value,
-            'portfolio_with_options': portfolio_with_options,
+            'portfolio_value_with_options_overlay': portfolio_value_with_options_overlay,
             'metrics': metrics,
         }
     
 
     def run_long_short_strategy(self, factor_scores_df, stock_prices, months,
-                                target_leverage, max_turnover, initial_cash):
+                                long_weight, short_weight, max_turnover, initial_cash,
+                                cov_matrix, risk_aversion, single_asset_bound):
         """Run long-short strategy with turnover constraint"""
         stocks = stock_prices.columns
 
         # Initialize Series for tracking portfolio values
+        cash = pd.Series(index=months, dtype=float)
         portfolio_value = pd.Series(index=months, dtype=float)
-        portfolio_value[months[0]] = initial_cash
+        stock_position_value = 0
 
-        # Initialize DataFrames for weights and shares
-        target_weights = pd.DataFrame(index=factor_scores_df.index, columns=stocks)
+        # Set initial cash and portfolio value
+        cash[months[0]] = initial_cash
+        portfolio_value[months[0]] = cash[months[0]]
+
+        # Initialize DataFrames for alphas, weights and shares
+        alphas = pd.DataFrame(index=factor_scores_df.index, columns=stocks)
         weights = pd.DataFrame(index=factor_scores_df.index, columns=stocks)
         shares = pd.DataFrame(index=factor_scores_df.index, columns=stocks)
 
         # Loop through months with factor scores
         for i, date in enumerate(factor_scores_df.index):
             # 1. Calculate target weights from factor scores
-            target_weights.loc[date] = calculate_factor_weights(
-                factor_scores_df.loc[date], target_leverage
-            )
+            alphas.loc[date] = calculate_alphas(factor_scores_df.loc[date], cov_matrix)
 
-            # 2. Apply turnover constraint
+            # 2. Optimize weights with constraints
             if i == 0:
-                weights.loc[date] = target_weights.loc[date]
+                weights.loc[date] = optimize_weights(
+                    alphas.loc[date].values, np.zeros(len(stocks), dtype=object),
+                    2 * (long_weight + short_weight), long_weight, short_weight,
+                    cov_matrix.values, risk_aversion, single_asset_bound
+                )
             else:
                 prev_date = factor_scores_df.index[i-1]
                 drifted_weights = shares.loc[prev_date] * stock_prices.loc[date] / portfolio_value[date]
 
-                # Optimize weights with constraints
                 weights.loc[date] = optimize_weights(
-                    target_weights.loc[date].values,
-                    drifted_weights.values,
-                    max_turnover,
-                    target_leverage
+                    alphas.loc[date].values, drifted_weights.values,
+                    max_turnover, long_weight, short_weight,
+                    cov_matrix.values, risk_aversion, single_asset_bound
                 )
             
             # 3. Calculate shares using current portfolio value
             shares.loc[date] = (weights.loc[date] * portfolio_value[date]) / stock_prices.loc[date]
 
-            # 4. Calculate portfolio value at t+1 using shares from t and prices at t+1
+            # 4. Update positions
+            cash.loc[date] = cash.loc[date] - ((shares.loc[date] * stock_prices.loc[date]).sum() - stock_position_value)
+
+            # 5. Calculate portfolio value at t+1 using shares from t and prices at t+1
             next_date = months[i+1]
-            portfolio_value[next_date] = portfolio_value[date] + (
-                shares.loc[date] * stock_prices.loc[next_date]
-            ).sum()
+            cash[next_date] = cash[date]
+            stock_position_value = (shares.loc[date] * stock_prices.loc[next_date]).sum()
+            portfolio_value[next_date] = cash.loc[next_date] + stock_position_value
 
         return portfolio_value, weights, shares
     
@@ -181,11 +197,12 @@ class LongShortSimulation:
         # Calculate cumulative options strategy performance
         call_strategy = call_return.sum(axis=1).cumsum()
         put_strategy = put_return.sum(axis=1).cumsum()
+        options_overlay = call_strategy + put_strategy
 
         # Add options PnL to portfolio value
-        portfolio_with_options = portfolio_value + call_strategy + put_strategy
+        portfolio_value_with_options_overlay = portfolio_value + options_overlay
 
-        return portfolio_with_options
+        return portfolio_value_with_options_overlay
     
 
     def calculate_metrics(self, portfolio_value, portfolio_with_options):

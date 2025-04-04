@@ -20,19 +20,22 @@ def main():
     # Define structured parameters
     market_params = {
         'factor_autocorrelation': 0.1,
-        'information_coefficient': 0.025,
-        'annual_expected_return': 0.06,
+        'information_coefficient': 0.05,
+        'annual_expected_return': 0.0,
     }
 
     long_short_params = {
-        'n_stocks': 500,
+        'n_stocks': 100,
         'initial_cash': 10000000,
+        'long_weight': 1.0,
+        'short_weight': 1.0,
         'max_turnover': 1.0,
-        'target_leverage': 1.5  # This could be in long_short_params
+        'risk_aversion': 0.5,
+        'single_asset_bound': 0.05,
     }
 
     options_overlay_params = {
-        'otm_percentage': 0.0  # Default value
+        'otm_percentage': 0.0
     }
 
     # Define parameter ranges (only for otm_percentage for now)

@@ -4,24 +4,35 @@ import cvxpy as cp
 from scipy.stats import norm
 
 
-def calculate_factor_weights(factor_scores, target_leverage=1.0):
-    """Calculate portfolio weights based on factor scores"""
+def calculate_alphas(factor_scores, cov_matrix):
+    """Calculate portfolio weights based on factor scores and covariance matrix"""
     ranked_stocks = factor_scores.rank(method='first', ascending=True)
     demeaned_ranks = ranked_stocks - ranked_stocks.mean()
     standardized_ranks = demeaned_ranks / demeaned_ranks.std()
-    return standardized_ranks / standardized_ranks.abs().sum() * (2 * target_leverage)
+
+    # Calculate portfolio volatility
+    portfolio_volatility = np.sqrt(standardized_ranks.dot(cov_matrix).dot(standardized_ranks))
+
+    # Risk-adjust the standardized ranks
+    risk_adjusted_ranks = standardized_ranks / portfolio_volatility
+
+    # Transform to alpha space
+    alphas = cov_matrix.dot(risk_adjusted_ranks)
+
+    return alphas
 
 
-def optimize_weights(target_weights, drifted_weights, max_turnover, target_leverage):
+def optimize_weights(alphas, old_weights, max_turnover, long_weight, short_weight, cov_matrix, risk_aversion, single_asset_bound):
     """Optimize weights with turnover constraint and leverage target"""
-    n_stocks = len(target_weights)
+    n_stocks = len(alphas)
 
     # Set up the optimization problem with split variables
     w_long = cp.Variable(n_stocks)
     w_short = cp.Variable(n_stocks)
+    w = w_long - w_short
 
     # Objective: minimize squared difference to target weights
-    objective = cp.Minimize(cp.sum_squares(w_long - w_short - target_weights))
+    objective = cp.Maximize(w @ alphas - risk_aversion * cp.quad_form(w, cov_matrix))
 
     # Constraints
     constraints = [
@@ -29,14 +40,16 @@ def optimize_weights(target_weights, drifted_weights, max_turnover, target_lever
         w_long >= 0,
         w_short >= 0,
 
+        # Asset size constraints
+        w <= single_asset_bound,
+        w >= -single_asset_bound,
+
         # Turnover constraint
-        cp.norm(w_long - w_short - drifted_weights, 1) <= max_turnover,
+        cp.norm(w - old_weights, 1) <= max_turnover,
 
-        # Cash neutral constraint
-        cp.sum(w_long - w_short) == 0,
-
-        # Leverage constraint
-        cp.sum(w_long + w_short) == 2 * target_leverage,
+        # Total exposure constraints
+        cp.sum(w_long) == long_weight,
+        cp.sum(w_short) == short_weight,
     ]
 
     #Solve the problem
@@ -46,4 +59,4 @@ def optimize_weights(target_weights, drifted_weights, max_turnover, target_lever
     if problem.status == "optimal":
         return w_long.value - w_short.value
     else:
-        return drifted_weights
+        return old_weights
