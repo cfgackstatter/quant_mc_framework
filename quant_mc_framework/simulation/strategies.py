@@ -1,49 +1,135 @@
 import numpy as np
 import pandas as pd
 import cvxpy as cp
-from scipy.stats import norm
 
 
-def calculate_factor_weights(factor_scores, target_leverage=1.0):
-    """Calculate portfolio weights based on factor scores"""
+def calculate_alphas(factor_scores: pd.Series, cov_matrix: pd.DataFrame) -> pd.Series:
+    """
+    Calculate alpha signals based on factor scores and risk model.
+    
+    Parameters
+    ----------
+    factor_scores : pd.Series
+        Factor scores for each stock
+    cov_matrix : pd.DataFrame
+        Covariance matrix of stock returns (annualized)
+        
+    Returns
+    -------
+    pd.Series
+        Alpha signals for portfolio optimization
+        
+    Notes
+    -----
+    This function transforms factor scores into alpha signals by:
+    1. Ranking the factor scores
+    2. Demeaning and standardizing the ranks
+    3. Risk-adjusting the standardized ranks
+    4. Transforming to alpha space using the covariance matrix
+    """
+    # Convert factor scores to ranks (higher factor score = higher rank)
     ranked_stocks = factor_scores.rank(method='first', ascending=True)
+
+    # Demean the ranks to center around zero
     demeaned_ranks = ranked_stocks - ranked_stocks.mean()
+
+    # Standardize to unit variance
     standardized_ranks = demeaned_ranks / demeaned_ranks.std()
-    return standardized_ranks / standardized_ranks.abs().sum() * (2 * target_leverage)
+
+    # Calculate portfolio volatility of the standardized ranks long-short portfolio
+    portfolio_volatility = np.sqrt(standardized_ranks.dot(cov_matrix).dot(standardized_ranks))
+
+    # Risk-adjust the standardized ranks long-short portfolio
+    risk_adjusted_ranks = standardized_ranks / portfolio_volatility
+
+    # Transform to alpha space by multiplying by covariance matrix
+    # This converts factor signals into expected return space
+    alphas = cov_matrix.dot(risk_adjusted_ranks)
+
+    return alphas
 
 
-def optimize_weights(target_weights, drifted_weights, max_turnover, target_leverage):
-    """Optimize weights with turnover constraint and leverage target"""
-    n_stocks = len(target_weights)
+def optimize_weights(alphas: np.ndarray, old_weights: np.ndarray, max_turnover: float,
+                     long_weight: float, short_weight: float, cov_matrix: np.ndarray,
+                     risk_aversion: float, single_asset_bound: float) -> np.ndarray:
+    """
+    Optimize portfolio weights with turnover constraint and leverage target.
+    
+    Parameters
+    ----------
+    alphas : np.ndarray
+        Alpha signals for each stock
+    old_weights : np.ndarray
+        Previous portfolio weights
+    max_turnover : float
+        Maximum allowed turnover (sum of absolute weight changes)
+    long_weight : float
+        Target long exposure (e.g., 1.0 for 100%, 1.3 for 130%)
+    short_weight : float
+        Target short exposure (e.g., 0.0 for long-only, 0.3 for 130/30)
+    cov_matrix : np.ndarray
+        Covariance matrix of stock returns
+    risk_aversion : float
+        Risk aversion parameter (higher = more risk-averse)
+    single_asset_bound : float
+        Maximum allowed weight for any single asset (e.g., 0.05 for 5%)
+        
+    Returns
+    -------
+    np.ndarray
+        Optimized portfolio weights
+        
+    Notes
+    -----
+    This function solves a quadratic optimization problem to maximize:
+    alpha return - risk_aversion * portfolio_variance
+    
+    Subject to constraints on:
+    - Long and short exposures
+    - Position size limits
+    - Portfolio turnover
+    """
+    n_stocks = len(alphas)
 
-    # Set up the optimization problem with split variables
-    w_long = cp.Variable(n_stocks)
-    w_short = cp.Variable(n_stocks)
+    # Set up the optimization problem with split variables for long and short positions
+    w_long = cp.Variable(n_stocks)  # Long positions (always positive)
+    w_short = cp.Variable(n_stocks)  # Short positions (always positive)
+    w = w_long - w_short            # Net positions (can be positive or negative)
 
-    # Objective: minimize squared difference to target weights
-    objective = cp.Minimize(cp.sum_squares(w_long - w_short - target_weights))
+    # Objective: maximize alpha return minus risk penalty
+    # The risk term uses a quadratic form to represent portfolio variance
+    objective = cp.Maximize(w @ alphas - risk_aversion * cp.quad_form(w, cov_matrix))
 
     # Constraints
     constraints = [
-        # Non-negativity constraints
+        # Non-negativity constraints for long and short positions
         w_long >= 0,
         w_short >= 0,
 
-        # Turnover constraint
-        cp.norm(w_long - w_short - drifted_weights, 1) <= max_turnover,
+        # Asset size constraints (limit concentration risk)
+        w <= single_asset_bound,   # Cap on long positions
+        w >= -single_asset_bound,  # Cap on short positions
 
-        # Cash neutral constraint
-        cp.sum(w_long - w_short) == 0,
+        # Turnover constraint (limit transaction costs)
+        cp.norm(w - old_weights, 1) <= max_turnover,
 
-        # Leverage constraint
-        cp.sum(w_long + w_short) == 2 * target_leverage,
+        # Total exposure constraints
+        cp.sum(w_long) == long_weight,    # Target long exposure
+        cp.sum(w_short) == short_weight,  # Target short exposure
     ]
 
-    #Solve the problem
+    # Solve the optimization problem
     problem = cp.Problem(objective, constraints)
-    problem.solve()
+    try:
+        # Use a more robust solver if available
+        problem.solve(solver=cp.OSQP)
+    except cp.SolverError:
+        # Fall back to default solver
+        problem.solve()
 
+    # Return optimized weights if solution is optimal, otherwise return old weights
     if problem.status == "optimal":
         return w_long.value - w_short.value
     else:
-        return drifted_weights
+        print(f"Warning: Optimization failed with status {problem.status}")
+        return old_weights

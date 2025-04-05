@@ -3,17 +3,23 @@ import pandas as pd
 import numpy as np
 import signac
 import itertools
+from typing import Dict, List, Any, Optional
 from .engine import LongShortSimulation
 
 
 class MonteCarloManager:
-    def __init__(self, base_params, param_ranges, n_simulations=100):
-        """Initialize Monte Carlo simulations manager.
-
-        Args:
-            base_params (dict): Base parameters for all simulations
-            param_ranges (dict): Parameters to vary with their ranges
-            n_simulations (int): Number of simulations per parameter set
+    def __init__(self, base_params: Dict[str, Any], param_ranges: Dict[str, List[Any]], n_simulations: int = 100):
+        """
+        Initialize Monte Carlo simulations manager.
+        
+        Parameters
+        ----------
+        base_params : Dict[str, Any]
+            Base parameters for all simulations
+        param_ranges : Dict[str, List[Any]]
+            Parameters to vary with their ranges
+        n_simulations : int, default=100
+            Number of simulations per parameter set
         """
         self.base_params = base_params
         self.param_ranges = param_ranges
@@ -21,11 +27,19 @@ class MonteCarloManager:
         self.project = signac.init_project('quant_mc_simulations')
 
     
-    def setup_jobs(self):
-        """Create jobs for all parameter combinations"""
+    def setup_jobs(self) -> None:
+        """
+        Create jobs for all parameter combinations.
+        
+        This method generates all possible combinations of the parameters
+        specified in param_ranges and creates a job for each combination.
+        """
         # Generate all combinations of parameter values
         param_keys = list(self.param_ranges.keys())
         param_values = list(self.param_ranges.values())
+
+        # Track number of jobs created
+        jobs_created = 0
 
         for values in itertools.product(*param_values):
             # Create parameter dictionary for this cobination
@@ -40,33 +54,80 @@ class MonteCarloManager:
             job.init()
             job.doc.setdefault('status', 'initialized')
             job.doc.setdefault('simulations', [])
+            jobs_created += 1
+
+        print(f"Created {jobs_created} simulation jobs")
 
 
-    def run_job(self, job_id):
-        """Run simulations for a specific job"""
-        job = self.project.open_job(id=job_id)
-        params = job.sp  # Get parameters from job statepoint
+    def run_job(self, job_id: str) -> str:
+        """
+        Run simulations for a specific job.
+        
+        Parameters
+        ----------
+        job_id : str
+            ID of the job to run
+            
+        Returns
+        -------
+        str
+            Job ID of the completed job
+            
+        Raises
+        ------
+        Exception
+            If simulation fails
+        """
+        try:
+            job = self.project.open_job(id=job_id)
+            params = job.sp  # Get parameters from job statepoint
 
-        # Run multiple simulations with different seed
-        results = []
-        for i in range(self.n_simulations):
-            seed = hash(f"{job.id}_{i}") % 2**32  # Generate deterministic seed
-            simulator = LongShortSimulation(params)
-            sim_result = simulator.run(seed=seed)
+            # Run multiple simulations with different seed
+            results = []
+            for i in range(self.n_simulations):
+                # Generate deterministic seed based on job ID and simulation index
+                seed = hash(f"{job.id}_{i}") % 2**32
 
-            # Store only metrics to save space
-            results.append(sim_result['metrics'])
+                # Create and run simulator
+                simulator = LongShortSimulation(params)
+                sim_result = simulator.run(seed=seed)
 
-        # Store result in job document
-        job.doc['simulations'] = results
-        job.doc['status'] = 'completed'
-        return job.id
+                # Store only metrics to save space
+                results.append(sim_result['metrics'])
+
+            # Store result in job document
+            job.doc['simulations'] = results
+            job.doc['status'] = 'completed'
+            return job.id
+        
+        except Exception as e:
+            # Log the error and re-raise
+            print(f"Error in job {job_id}: {str(e)}")
+            raise
     
 
-    def run_all_jobs(self, max_workers=None):
-        """Run all jobs in parallel"""
+    def run_all_jobs(self, max_workers: Optional[int] = None) -> None:
+        """
+        Run all initialized jobs in parallel.
+        
+        Parameters
+        ----------
+        max_workers : int, optional
+            Maximum number of worker threads. If None, uses default based on system.
+        """
+        # Find all jobs that are initialized but not yet completed
         jobs = list(self.project.find_jobs({'doc.status': 'initialized'}))
         job_ids = [job.id for job in jobs]
+
+        if not job_ids:
+            print("No jobs to run. Use setup_jobs() first.")
+            return
+        
+        print(f"Running {len(job_ids)} jobs with {max_workers if max_workers else 'default'} workers")
+
+        # Run jobs in parallel using ThreadPoolExecutor
+        completed = 0
+        failed = 0
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = [executor.submit(self.run_job, job_id) for job_id in job_ids]
@@ -74,13 +135,31 @@ class MonteCarloManager:
             for future in concurrent.futures.as_completed(futures):
                 try:
                     job_id = future.result()
-                    print(f"Completed job {job_id}")
+                    completed += 1
+                    print(f"Completed job {job_id} ({completed}/{len(job_ids)})")
                 except Exception as e:
+                    failed += 1
                     print(f"Job failed with error: {e}")
 
+        print(f"Simulation complete. {completed} jobs succeeded, {failed} jobs failed.")
+
     
-    def get_results(self, metric_name='sharpe_ratio', strategy='options_overlay'):
-        """Get aggregated results for a specific metric"""
+    def get_results(self, metric_name: str = 'sharpe_ratio', strategy: str = 'options_overlay') -> Dict[str, Dict[Any, List[float]]]:
+        """
+        Get aggregated results for a specific metric.
+        
+        Parameters
+        ----------
+        metric_name : str, default='sharpe_ratio'
+            Name of the metric to extract
+        strategy : str, default='options_overlay'
+            Strategy to extract metrics from ('long_short' or 'options_overlay')
+            
+        Returns
+        -------
+        Dict[str, Dict[Any, List[float]]]
+            Dictionary mapping parameter names to dictionaries of parameter values and metric lists
+        """
         results = {}
 
         # Get all parameter keys
@@ -100,7 +179,10 @@ class MonteCarloManager:
                         # Extract the metric from each simulation
                         for sim in job.doc.get('simulations', []):
                             if strategy in sim and metric_name in sim[strategy]:
-                                metric_by_param[value].append(sim[strategy][metric_name])
+                                metric_value = sim[strategy][metric_name]
+                                # Skip NaN values
+                                if not np.isnan(metric_value):
+                                    metric_by_param[value].append(metric_value)
 
             results[param] = metric_by_param
 
