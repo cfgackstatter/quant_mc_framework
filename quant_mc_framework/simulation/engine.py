@@ -11,6 +11,12 @@ from ..simulation.strategies import (
     calculate_alphas, optimize_weights
 )
 
+from ..utils.metrics import (
+    calculate_total_return, calculate_annualized_return,
+    calculate_sharpe_ratio, calculate_max_drawdown,
+    calculate_volatility
+)
+
 
 class LongShortSimulation:
     def __init__(self, params: Dict[str, Any]):
@@ -352,26 +358,27 @@ class LongShortSimulation:
         Dict[str, Dict[str, float]]
             Dictionary of performance metrics for each strategy
         """
-        # Calculate returns
-        returns = portfolio_value.pct_change().dropna()
-        returns_with_options_overlay = portfolio_value_with_options_overlay.pct_change().dropna()
-        
-        # Calculate metrics
-        metrics = {
-            'long_short': {
-                'total_return': portfolio_value.iloc[-1] / portfolio_value.iloc[0] - 1,
-                'annualized_return': (portfolio_value.iloc[-1] / portfolio_value.iloc[0]) ** (12 / len(returns)) - 1,
-                'sharpe_ratio': returns.mean() / returns.std() * np.sqrt(12),
-                'max_drawdown': (portfolio_value / portfolio_value.cummax() - 1).min(),
-                'volatility': returns.std() * np.sqrt(12),
-            },
-            'options_overlay': {
-                'total_return': portfolio_value_with_options_overlay.iloc[-1] / portfolio_value_with_options_overlay.iloc[0] - 1,
-                'annualized_return': (portfolio_value_with_options_overlay.iloc[-1] / portfolio_value_with_options_overlay.iloc[0]) ** (12 / len(returns_with_options_overlay)) - 1,
-                'sharpe_ratio': returns_with_options_overlay.mean() / returns_with_options_overlay.std() * np.sqrt(12),
-                'max_drawdown': (portfolio_value_with_options_overlay / portfolio_value_with_options_overlay.cummax() - 1).min(),
-                'volatility': returns_with_options_overlay.std() * np.sqrt(12),
-            }
+        # Define metric functions
+        metric_functions = {
+            'total_return': calculate_total_return,
+            'annualized_return': calculate_annualized_return,
+            'sharpe_ratio': calculate_sharpe_ratio,
+            'max_drawdown': calculate_max_drawdown,
+            'volatility': calculate_volatility
         }
+
+        # Define portfolio values to analyze
+        portfolios = {
+            'long_short': portfolio_value,
+            'options_overlay': portfolio_value_with_options_overlay
+        }
+
+        
+        # Calculate metrics for each portfolio
+        metrics = {}
+        for portfolio_name, portfolio_data in portfolios.items():
+            metrics[portfolio_name] = {}
+            for metric_name, metric_func in metric_functions.items():
+                metrics[portfolio_name][metric_name] = metric_func(portfolio_data)
         
         return metrics
