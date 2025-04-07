@@ -1,41 +1,8 @@
-import numpy as np
-import pandas as pd
 from typing import Dict, Any
-import matplotlib.pyplot as plt
 
+from quant_mc_framework.config import get_parameters
 from quant_mc_framework.simulation.engine import LongShortSimulation
 from quant_mc_framework.analysis.visualization import plot_portfolio_values
-
-
-def setup_parameters() -> Dict[str, Any]:
-    """
-    Define simulation parameters for a single run.
-    
-    Returns
-    -------
-    Dict[str, Any]
-        Dictionary of parameters for the simulation
-    """
-    params = {
-        # Market parameters
-        'factor_autocorrelation': 0.1,
-        'information_coefficient': 0.05,
-        'annual_expected_return': 0.0,
-        
-        # Long-short strategy parameters
-        'n_stocks': 100,
-        'initial_cash': 10000000,
-        'long_weight': 2.5,
-        'short_weight': 1.5,
-        'max_turnover': 0.5,
-        'risk_aversion': 0.5,
-        'single_asset_bound': 0.05,
-        
-        # Options overlay parameters
-        'otm_percentage': 0.0,
-    }
-    
-    return params
 
 
 def run_single_simulation(seed: int = 42) -> Dict[str, Any]:
@@ -53,7 +20,7 @@ def run_single_simulation(seed: int = 42) -> Dict[str, Any]:
         Simulation results including portfolio values and metrics
     """
     # Get parameters
-    params = setup_parameters()
+    params, _ = get_parameters()
 
     # Create and run simulator
     simulator = LongShortSimulation(params)
