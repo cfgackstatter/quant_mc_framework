@@ -53,11 +53,11 @@ def calculate_sharpe_ratio(timeseries: pd.Series, risk_free_rate: float = 0.0) -
     float
         Sharpe ratio of the timeseries
     """
-    total_return = calculate_total_return(timeseries)
-    years = (timeseries.index[-1] - timeseries.index[0]).days / 365.25
-    average_annual_return = total_return / years
-    average_excess_return = average_annual_return - risk_free_rate
-    return average_excess_return / timeseries.pct_change().std()
+    annualized_return = calculate_annualized_return(timeseries)
+    excess_return = annualized_return - risk_free_rate
+    volatility = calculate_volatility(timeseries)
+
+    return excess_return / volatility
 
 
 def calculate_max_drawdown(timeseries: pd.Series) -> float:
