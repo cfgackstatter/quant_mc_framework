@@ -194,7 +194,7 @@ class LongShortSimulation:
                 # First period: no previous weights, allow full turnover
                 weights.loc[date] = optimize_weights(
                     alphas.loc[date].values, np.zeros(len(stocks), dtype=object),
-                    2 * (long_weight + short_weight), long_weight, short_weight,
+                    2.01 * (long_weight + short_weight), long_weight, short_weight,
                     cov_matrix.values, risk_aversion, single_asset_bound
                 )
             else:

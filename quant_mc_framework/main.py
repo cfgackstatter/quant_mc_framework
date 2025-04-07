@@ -32,7 +32,7 @@ def setup_parameters() -> tuple[Dict[str, Any], Dict[str, List[Any]]]:
         'initial_cash': 10000000,
         'long_weight': 2.5,
         'short_weight': 1.5,
-        'max_turnover': 1.0,
+        'max_turnover': 0.5,
         'risk_aversion': 0.5,
         'single_asset_bound': 0.05,
     }
@@ -43,7 +43,7 @@ def setup_parameters() -> tuple[Dict[str, Any], Dict[str, List[Any]]]:
 
     # Define parameter ranges (only for otm_percentage for now)
     param_ranges = {
-        'otm_percentage': [-0.05, 0.0, 0.05]
+        'otm_percentage': [-0.1, -0.05, 0.0, 0.05, 0.1]
     }
 
     # Combine all parameters into base_params for the MonteCarloManager

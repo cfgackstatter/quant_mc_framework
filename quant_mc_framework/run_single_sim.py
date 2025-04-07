@@ -32,7 +32,7 @@ def setup_parameters() -> Dict[str, Any]:
         'single_asset_bound': 0.05,
         
         # Options overlay parameters
-        'otm_percentage': 0.0
+        'otm_percentage': 0.0,
     }
     
     return params

@@ -91,6 +91,9 @@ def optimize_weights(alphas: np.ndarray, old_weights: np.ndarray, max_turnover: 
     """
     n_stocks = len(alphas)
 
+    # Regularize the covariance matrix to ensure numerical stability
+    cov_matrix_reg = cov_matrix + np.eye(n_stocks) * 1e-6
+
     # Set up the optimization problem with split variables for long and short positions
     w_long = cp.Variable(n_stocks)  # Long positions (always positive)
     w_short = cp.Variable(n_stocks)  # Short positions (always positive)
@@ -98,7 +101,7 @@ def optimize_weights(alphas: np.ndarray, old_weights: np.ndarray, max_turnover: 
 
     # Objective: maximize alpha return minus risk penalty
     # The risk term uses a quadratic form to represent portfolio variance
-    objective = cp.Maximize(w @ alphas - risk_aversion * cp.quad_form(w, cov_matrix))
+    objective = cp.Maximize(w @ alphas - risk_aversion * cp.quad_form(w, cov_matrix_reg))
 
     # Constraints
     constraints = [
