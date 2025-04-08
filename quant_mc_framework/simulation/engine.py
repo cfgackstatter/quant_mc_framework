@@ -63,6 +63,13 @@ class LongShortSimulation:
         information_coefficient = self.params.get('information_coefficient')
         annual_expected_return = self.params.get('annual_expected_return')
 
+        # Financing parameters
+        cash_interest_rate = self.params.get('cash_interest_rate')
+        margin_interest_rate = self.params.get('margin_interest_rate')
+        borrow_fee_base = self.params.get('borrow_fee_base')
+        borrow_fee_hard = self.params.get('borrow_fee_hard')
+        hard_to_borrow_pct = self.params.get('hard_to_borrow_pct')
+
         # Long-short strategy parameters
         n_stocks = self.params.get('n_stocks')
         initial_cash = self.params.get('initial_cash')
@@ -111,7 +118,9 @@ class LongShortSimulation:
         portfolio_value, weights, shares = self.run_long_short_strategy(
             factor_scores_df, stock_prices, months,
             long_weight, short_weight, max_turnover, initial_cash,
-            cov_matrix, risk_aversion, single_asset_bound
+            cov_matrix, risk_aversion, single_asset_bound, cash_interest_rate,
+            margin_interest_rate, hard_to_borrow_pct, borrow_fee_base,
+            borrow_fee_hard
         )
 
         # Run options overlay
@@ -133,7 +142,9 @@ class LongShortSimulation:
     def run_long_short_strategy(
             self, factor_scores_df: pd.DataFrame, stock_prices: pd.DataFrame, months: pd.DatetimeIndex,
             long_weight: float, short_weight: float, max_turnover: float, initial_cash: float,
-            cov_matrix: pd.DataFrame, risk_aversion: float, single_asset_bound: float
+            cov_matrix: pd.DataFrame, risk_aversion: float, single_asset_bound: float,
+            cash_interest_rate: float, margin_interest_rate: float, hard_to_borrow_pct: float, borrow_fee_base: float,
+            borrow_fee_hard: float
         ) -> Tuple[pd.Series, pd.DataFrame, pd.DataFrame]:
         """
         Run long-short strategy with turnover constraint and cash tracking.
@@ -193,40 +204,56 @@ class LongShortSimulation:
             if i == 0:
                 # First period: no previous weights, allow full turnover
                 weights.loc[date] = optimize_weights(
-                    alphas.loc[date].values, np.zeros(len(stocks), dtype=object),
+                    alphas.loc[date].values, np.zeros(len(stocks), dtype=object), 1.0,
                     2.01 * (long_weight + short_weight), long_weight, short_weight,
                     cov_matrix.values, risk_aversion, single_asset_bound
                 )
             else:
                 # Subsequent periods: apply turnover constraint
                 prev_date = factor_scores_df.index[i-1]
-                # Calculate drifted weights based on price changes
+                # Calculate drifted weights based on price changes and drifted cash weight
                 drifted_weights = shares.loc[prev_date] * stock_prices.loc[date] / portfolio_value[date]
+                drifted_cash_weight = cash.loc[date] / portfolio_value[date]
 
                 weights.loc[date] = optimize_weights(
-                    alphas.loc[date].values, drifted_weights.values,
+                    alphas.loc[date].values, drifted_weights.values, drifted_cash_weight,
                     max_turnover, long_weight, short_weight,
                     cov_matrix.values, risk_aversion, single_asset_bound
                 )
             
+            # Set optimized cash weight (target cash weight)
+            cash.loc[date] = (1.0 - long_weight + short_weight) * portfolio_value.loc[date]
+            
             # 3. Calculate shares using current portfolio value
             shares.loc[date] = (weights.loc[date] * portfolio_value[date]) / stock_prices.loc[date]
+            long_value = (weights.loc[date].clip(lower=0) * portfolio_value[date]).sum()
+            short_value = (weights.loc[date].clip(upper=0).abs() * portfolio_value[date]).sum()
 
-            # 4. Update cash position based on trading activity
-            # Calculate the new stock position value
-            new_stock_position_value = (shares.loc[date] * stock_prices.loc[date]).sum()
-            # Update cash by subtracting the net investment
-            cash.loc[date] = cash.loc[date] - (new_stock_position_value - stock_position_value)
-
-            # 5. Calculate portfolio value at t+1 using shares from t and prices at t+1
+            # 4. Calculate portfolio value at t+1 using shares from t and prices at t+1 and add financing costs
             next_date = months[i+1]
-            # Cash remains the same until next rebalancing
-            cash[next_date] = cash[date]
+
+            # Calculate financing costs
+            cash_interest = cash.loc[date] * cash_interest_rate / 12
+            short_rebate = short_value * cash_interest_rate / 12
+            margin_cost = max(0, long_value - portfolio_value[date]) * margin_interest_rate / 12
+
+            # Stock borrow fees
+            easy_to_borrow = short_value * (1 - hard_to_borrow_pct) * borrow_fee_base / 12
+            hard_to_borrow = short_value * hard_to_borrow_pct * borrow_fee_hard / 12
+            borrow_fees = easy_to_borrow + hard_to_borrow
+
+            # Net financing impact
+            net_financing = cash_interest + short_rebate - margin_cost - borrow_fees
+
+            # Update cash with financing impact
+            cash[next_date] = cash[date] + net_financing
+
             # Update stock position value with new prices
             stock_position_value = (shares.loc[date] * stock_prices.loc[next_date]).sum()
+            
             # Portfolio value is cash plus stock position value
             portfolio_value[next_date] = cash.loc[next_date] + stock_position_value
-
+        
         return portfolio_value, weights, shares
     
 

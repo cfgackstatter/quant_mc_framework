@@ -49,11 +49,19 @@ def calculate_alphas(factor_scores: pd.Series, cov_matrix: pd.DataFrame) -> pd.S
     return alphas
 
 
-def optimize_weights(alphas: np.ndarray, old_weights: np.ndarray, max_turnover: float,
-                     long_weight: float, short_weight: float, cov_matrix: np.ndarray,
-                     risk_aversion: float, single_asset_bound: float) -> np.ndarray:
+def optimize_weights(
+        alphas: np.ndarray,
+        old_weights: np.ndarray,
+        old_cash_weight: float,
+        max_turnover: float,
+        long_weight: float,
+        short_weight: float,
+        cov_matrix: np.ndarray,
+        risk_aversion: float,
+        single_asset_bound: float
+    ) -> np.ndarray:
     """
-    Optimize portfolio weights with turnover constraint and leverage target.
+    Optimize portfolio weights with turnover constraint and long and short target.
     
     Parameters
     ----------
@@ -61,6 +69,8 @@ def optimize_weights(alphas: np.ndarray, old_weights: np.ndarray, max_turnover: 
         Alpha signals for each stock
     old_weights : np.ndarray
         Previous portfolio weights
+    old_cash_weight : float
+        Previous cash weight
     max_turnover : float
         Maximum allowed turnover (sum of absolute weight changes)
     long_weight : float
@@ -95,9 +105,9 @@ def optimize_weights(alphas: np.ndarray, old_weights: np.ndarray, max_turnover: 
     cov_matrix_reg = cov_matrix + np.eye(n_stocks) * 1e-6
 
     # Set up the optimization problem with split variables for long and short positions
-    w_long = cp.Variable(n_stocks)  # Long positions (always positive)
-    w_short = cp.Variable(n_stocks)  # Short positions (always positive)
-    w = w_long - w_short            # Net positions (can be positive or negative)
+    w_long = cp.Variable(n_stocks)      # Long positions (always positive)
+    w_short = cp.Variable(n_stocks)     # Short positions (always positive)
+    w = w_long - w_short                # Net positions (can be positive or negative)
 
     # Objective: maximize alpha return minus risk penalty
     # The risk term uses a quadratic form to represent portfolio variance
@@ -114,11 +124,11 @@ def optimize_weights(alphas: np.ndarray, old_weights: np.ndarray, max_turnover: 
         w >= -single_asset_bound,  # Cap on short positions
 
         # Turnover constraint (limit transaction costs)
-        cp.norm(w - old_weights, 1) <= max_turnover,
+        cp.norm((w - old_weights), 1) + np.abs(1.0 - long_weight + short_weight - old_cash_weight) <= max_turnover,
 
         # Total exposure constraints
-        cp.sum(w_long) == long_weight,    # Target long exposure
-        cp.sum(w_short) == short_weight,  # Target short exposure
+        cp.sum(w_long) == long_weight,              # Target long exposure
+        cp.sum(w_short) == short_weight,            # Target short exposure
     ]
 
     # Solve the optimization problem
