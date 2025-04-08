@@ -171,6 +171,16 @@ class LongShortSimulation:
             Risk aversion parameter (higher = more risk-averse)
         single_asset_bound : float
             Maximum allowed weight for any single asset
+        cash_interest_rate : float
+            Annual interest rate earned on cash
+        margin_interest_rate : float
+            Annual interest rate paid on margin
+        hard_to_borrow_pct : float
+            Percentage of shorted stocks that are hard-to-borrow
+        borrow_fee_base : float
+            Base annual fee for borrowing stock
+        borrow_fee_hard : float
+            Annual fee for hard-to-borrow stocks
             
         Returns
         -------
